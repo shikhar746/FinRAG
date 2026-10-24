@@ -8,10 +8,11 @@ citation.
 Evaluation comes first. A chat interface is optional and not built yet.
 
 > **Status: MVP in progress.** Ingestion and page retrieval (BM25 vs dense) are done
-> and measured on all 150 questions. Closed-book vs BM25-RAG generation is built and
-> unit-tested but **not yet run**: the LLM backend, tolerance and budget are still to
-> be chosen (see `DECISIONS.md` D13, D15). Every number below is copied from
-> `results/` by `scripts/update_readme.py`. Anything not yet measured is a placeholder.
+> and measured on all 150 questions. Closed-book vs BM25-RAG generation (Ollama,
+> `qwen2.5:7b`) is built and tested but **not yet run**. It needs a machine that can
+> reach the Ollama model registry: `bash scripts/run_generation.sh`. Every number
+> below is copied from `results/` by `scripts/update_readme.py`. Anything not yet
+> measured is a placeholder.
 
 ## Data
 
@@ -152,7 +153,9 @@ For each gold evidence item we measure word overlap between the dataset's
 [not yet measured: run the script that writes `results/generation/bm25_rag.md`]
 <!-- END results/generation/bm25_rag.md -->
 
-Hand-checked accuracy: [not yet measured]
+<!-- BEGIN results/generation/hand_labels.md -->
+[not yet measured: run the script that writes `results/generation/hand_labels.md`]
+<!-- END results/generation/hand_labels.md -->
 
 ## What the results show so far
 
@@ -213,10 +216,10 @@ export PYTHONPATH=.
 for c in bm25_page dense_page_truncate dense_page_maxwindow; do
   .venv/bin/python scripts/run_eval.py configs/$c.yaml; done
 .venv/bin/python scripts/compare.py bm25_page dense_page_truncate dense_page_maxwindow
-# after setting llm.* and answers.numeric_rel_tol in configs/base.yaml:
-.venv/bin/python scripts/run_eval.py configs/closed_book.yaml
-.venv/bin/python scripts/run_eval.py configs/bm25_rag.yaml
-.venv/bin/python scripts/make_label_csv.py closed_book bm25_rag
+# generation: needs Ollama installed and running (`ollama serve`)
+bash scripts/run_generation.sh                     # pulls qwen2.5:7b if missing, runs both configs
+# fill human_correct (1/0) in results/labels/to_label.csv, then:
+.venv/bin/python scripts/score_labels.py
 .venv/bin/python scripts/update_readme.py
 .venv/bin/python -m pytest
 ```
@@ -226,7 +229,8 @@ for c in bm25_page dense_page_truncate dense_page_maxwindow; do
 ```
 finrag/   ingest.py  retrieve.py  generate.py  evaluate.py
 configs/  base.yaml + one YAML per configuration
-scripts/  download_data, download_model, make_splits, ingest, run_eval, compare, make_label_csv, update_readme
+scripts/  download_data, download_model, make_splits, ingest, run_eval, compare,
+          run_generation.sh, make_label_csv, score_labels, update_readme
 tests/    metrics, citation parsing, numeric matcher
 results/  generated tables (committed); data/ is downloaded or derived (not committed)
 ```

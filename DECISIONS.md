@@ -101,14 +101,22 @@ Status: **decided**, **pending** (needs the project owner), or **phase 2**.
   the same question together. We call a difference real only if the 95% CI of
   mean(B − A) excludes zero.
 
-## Generation (built and unit-tested, not yet run)
+## Generation
 
-### D13. LLM backend (pending)
-- Options: a local model via Ollama (free), or the Anthropic API with a hard dollar
-  cap (`AnthropicBackend` refuses any call that could exceed `max_usd`, and counts
-  spend from the cache so a restart does not reset it). Both live in `finrag/generate.py`.
-- Note: in the development container, `registry.ollama.ai` is blocked, so Ollama models
-  cannot be pulled there.
+### D13. LLM backend: Ollama with `qwen2.5:7b` (decided)
+- The project owner chose Ollama: free and local, with no API spend. I chose the model:
+  - **Size:** 7B parameters, about 4.7 GB at Q4, so it runs on a 16 GB laptop.
+  - **Context:** a 32k window, which comfortably holds our largest RAG prompt (about
+    9k tokens, measured on dev with 5 pages).
+  - **Fit for the task:** strong on numeric and table questions for its size, and
+    Apache-2.0 licensed.
+- Contamination: its training data postdates these filings, so it may have seen them.
+  The closed-book run measures this rather than assuming either way.
+- `scripts/run_generation.sh` writes the exact Ollama model digest to
+  `results/generation/ollama_model.txt`, because a tag can later point at new weights.
+- Not run in the development container: `ollama.com` and `registry.ollama.ai` are blocked
+  there, so generation runs on the owner's machine. The Anthropic backend (with a hard
+  dollar cap) stays in the code but is unused.
 
 ### D14. Prompting and output format (decided, untested on a model)
 - Temperature 0. Pages are shown as `<page id="N">` with 0-based ids. The model must
@@ -120,13 +128,21 @@ Status: **decided**, **pending** (needs the project owner), or **phase 2**.
 - Ollama `num_ctx = 16384`: Ollama's default window is small and silently cuts long
   prompts, which would look like a retrieval failure.
 
-### D15. Numeric answers (tolerance pending)
+### D15. Numeric answers: within 1%, or within the gold's rounding (decided)
 - A gold answer is "numeric" only if the whole string is a number (`$1577.00`,
-  `-0.02`, `10.3%`). Sentence answers ("$400,000,000 increase.") go to hand labels.
-- "%" is dropped without dividing by 100. `allow_scale` (default off) optionally accepts
-  answers that are exactly 1e3/1e6/1e9 off (unit slips such as "1.577 billion" vs
-  "1577" in millions).
-- `numeric_rel_tol`: **pending**.
+  `-0.02`, `10.3%`). 17 of the 50 dev questions qualify. Sentence answers
+  ("$400,000,000 increase.") go to hand labels.
+- Correct = within 1% relative, **or** within half a unit of the gold's last shown digit.
+  Why the second rule: gold answers are rounded. "1.9%" could be any value from 1.85 to
+  1.95, so a model answer of 1.86 is consistent with it even though it is 2.1% away.
+  A flat 1% would wrongly mark it wrong.
+- Units are strict (`allow_scale: false`): the prompt asks for the question's unit, so
+  "1.577 billion" for a gold of "1577" (millions) is wrong. A separate diagnostic column,
+  `numeric_correct_any_scale`, shows how many errors are just unit slips. That is a
+  candidate failure-taxonomy label for phase 2.
+- "%" is dropped without dividing by 100. Only the `Final answer:` line is scored.
+- The hand labels also check this matcher: `scripts/score_labels.py` reports how often
+  the automatic verdict agrees with the human one on numeric rows.
 
 ### D16. MVP generation uses the 50 dev questions only (decided)
 - Keeps the 100 test questions untouched until phase 2. The 50 dev answers per config
