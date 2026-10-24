@@ -1,0 +1,4 @@
+base: base.yaml
+name: closed_book
+task: generation
+context: none             # lower bound: no retrieval

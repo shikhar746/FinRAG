@@ -1,0 +1,4 @@
+base: base.yaml
+name: bm25_rag
+task: generation
+context: bm25             # top answers.rag_k pages from BM25, document scope

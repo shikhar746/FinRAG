@@ -1,0 +1,6 @@
+base: base.yaml
+name: dense_page_truncate
+task: retrieval
+retriever: dense
+dense_mode: truncate      # page vector from its first 256 tokens only
+questions: all

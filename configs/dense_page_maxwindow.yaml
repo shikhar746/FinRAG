@@ -1,0 +1,6 @@
+base: base.yaml
+name: dense_page_maxwindow
+task: retrieval
+retriever: dense
+dense_mode: max_window    # page score = best of its 256-token windows; unit is still the page
+questions: all

@@ -1,0 +1,36 @@
+# Shared settings. Each config file sets `base: base.yaml` and overrides keys.
+seed: 13
+paths:
+  data: data
+  results: results
+  splits: splits.json
+  cache: data/cache
+
+retrieval:
+  top_k: 100              # ranking depth kept per question (so MRR is MRR@100)
+  ks: [1, 5, 10]
+  scopes: [document, corpus]   # document = search inside the question's filing; corpus = all 84 filings
+
+bm25: {k1: 1.5, b: 0.75}  # rank_bm25 defaults; not tuned
+
+dense:
+  model_dir: data/models/all-MiniLM-L6-v2
+  max_tokens: 256         # all-MiniLM-L6-v2's sentence-transformers max_seq_length
+  window_stride: 32       # overlap between windows in max_window mode
+  batch_size: 64
+
+# ---- generation (not run until the backend is chosen) ----
+llm:
+  backend: null           # TODO(you): "ollama" or "anthropic"
+  model: null             # e.g. an Ollama tag, or an Anthropic model id
+  temperature: 0.0
+  max_tokens: 512
+  ollama: {host: "http://localhost:11434", num_ctx: 16384}
+  anthropic: {max_usd: null, usd_per_mtok_in: null, usd_per_mtok_out: null}  # TODO(you): budget cap + current prices
+
+answers:
+  questions: dev          # MVP generation runs on the 50 dev questions only; test stays untouched
+  rag_k: 5                # pages given to the model in RAG configs
+  numeric_rel_tol: null   # TODO(you): e.g. 0.01 = within 1%
+  numeric_abs_tol: 0.0
+  allow_scale: false      # accept answers off by exactly 1e3/1e6/1e9 (unit slips)?

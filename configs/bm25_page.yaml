@@ -1,0 +1,5 @@
+base: base.yaml
+name: bm25_page
+task: retrieval
+retriever: bm25
+questions: all
