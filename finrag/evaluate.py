@@ -86,6 +86,21 @@ def parse_number(text: str) -> float | None:
     return _value(m) if m else None
 
 
+def rounding_tol(text: str) -> float:
+    """Half a unit of the last digit shown in a pure-number string.
+
+    Gold "1.9%" may be any value in [1.85, 1.95), so a prediction of 1.86 is
+    consistent with it: rounding_tol("1.9%") = 0.05. Scale words count:
+    rounding_tol("$2,018mn") = 0.5e6.
+    """
+    m = _NUM_FULL.match(text)
+    if not m:
+        raise ValueError(f"not a pure number: {text!r}")
+    decimals = len(m.group("num").partition(".")[2])
+    scale = _SCALES[m.group("scale").lower()] if m.group("scale") else 1.0
+    return 0.5 * 10 ** -decimals * scale
+
+
 def first_number(text: str) -> float | None:
     """The first number expression anywhere in text (used on the model's final-answer line)."""
     m = _NUM_ANY.search(text)

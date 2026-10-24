@@ -1,6 +1,6 @@
 import pytest
 
-from finrag.evaluate import first_number, numbers_match, parse_number
+from finrag.evaluate import first_number, numbers_match, parse_number, rounding_tol
 
 
 @pytest.mark.parametrize("text,value", [
@@ -53,3 +53,24 @@ def test_scale_mismatch_only_when_allowed():
 
 def test_missing_prediction_never_matches():
     assert not numbers_match(None, 1.0, rel_tol=1.0)
+
+
+@pytest.mark.parametrize("text,tol", [
+    ("1.9%", 0.05),
+    ("$1577.00", 0.005),
+    ("0", 0.5),
+    ("$2,018mn", 0.5e6),
+])
+def test_rounding_tol_is_half_last_digit(text, tol):
+    assert rounding_tol(text) == pytest.approx(tol)
+
+
+def test_rounded_gold_accepts_unrounded_prediction():
+    # 1.86 is 2.1% away from 1.9, but rounds to 1.9: should count as correct.
+    assert numbers_match(1.86, 1.9, rel_tol=0.01, abs_tol=rounding_tol("1.9%"))
+    assert not numbers_match(1.80, 1.9, rel_tol=0.01, abs_tol=rounding_tol("1.9%"))
+
+
+def test_rounding_tol_rejects_sentences():
+    with pytest.raises(ValueError):
+        rounding_tol("about 5")
