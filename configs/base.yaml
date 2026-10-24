@@ -19,18 +19,18 @@ dense:
   window_stride: 32       # overlap between windows in max_window mode
   batch_size: 64
 
-# ---- generation (not run until the backend is chosen) ----
+# ---- generation ----
 llm:
-  backend: null           # TODO(you): "ollama" or "anthropic"
-  model: null             # e.g. an Ollama tag, or an Anthropic model id
+  backend: ollama         # chosen by the project owner (free, local)
+  model: qwen2.5:7b       # see DECISIONS.md D13
   temperature: 0.0
   max_tokens: 512
   ollama: {host: "http://localhost:11434", num_ctx: 16384}
-  anthropic: {max_usd: null, usd_per_mtok_in: null, usd_per_mtok_out: null}  # TODO(you): budget cap + current prices
+  anthropic: {max_usd: null, usd_per_mtok_in: null, usd_per_mtok_out: null}  # unused; set a cap before ever switching
 
 answers:
   questions: dev          # MVP generation runs on the 50 dev questions only; test stays untouched
   rag_k: 5                # pages given to the model in RAG configs
-  numeric_rel_tol: null   # TODO(you): e.g. 0.01 = within 1%
-  numeric_abs_tol: 0.0
-  allow_scale: false      # accept answers off by exactly 1e3/1e6/1e9 (unit slips)?
+  numeric_rel_tol: 0.01   # within 1% ...
+  gold_rounding_tol: true # ... or within rounding of the gold's last shown digit (DECISIONS.md D15)
+  allow_scale: false      # strict on units; unit slips are reported in a separate column

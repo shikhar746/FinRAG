@@ -12,10 +12,11 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import requests
 import yaml
 
 from finrag.evaluate import (citation_scores, first_number, hit_at_k, numbers_match, parse_number,
-                             recall_at_k, reciprocal_rank)
+                             recall_at_k, reciprocal_rank, rounding_tol)
 from finrag.generate import (AnthropicBackend, GenerationCache, OllamaBackend, build_prompt, generate,
                              is_refusal, parse_citations, parse_final_answer)
 from finrag.ingest import gold_pages, load_questions
@@ -112,7 +113,7 @@ def run_retrieval(cfg: dict) -> None:
 def build_backend(cfg: dict, cache: GenerationCache):
     llm = cfg["llm"]
     if llm["backend"] is None or llm["model"] is None:
-        sys.exit("llm.backend / llm.model are not set in configs/base.yaml (we agreed to choose these together).")
+        sys.exit("llm.backend / llm.model are not set in configs/base.yaml.")
     if llm["backend"] == "ollama":
         return OllamaBackend(llm["model"], llm["ollama"]["host"], llm["temperature"], cfg["seed"],
                              llm["ollama"]["num_ctx"], llm["max_tokens"])
@@ -142,7 +143,11 @@ def run_generation(cfg: dict) -> None:
         else:
             context = None
         prompt = build_prompt(q["question"], q["doc_name"], context)
-        out = generate(backend, cache, prompt, {"financebench_id": q["financebench_id"], "config": cfg["name"]})
+        try:
+            out = generate(backend, cache, prompt, {"financebench_id": q["financebench_id"], "config": cfg["name"]})
+        except requests.ConnectionError:
+            sys.exit(f"Cannot reach Ollama at {cfg['llm']['ollama']['host']}. Start it with `ollama serve` "
+                     f"and pull the model with `ollama pull {cfg['llm']['model']}`.")
 
         final = parse_final_answer(out["text"])
         gold_num = parse_number(q["answer"])
@@ -151,11 +156,18 @@ def run_generation(cfg: dict) -> None:
                "final_answer": final, "refusal": float(is_refusal(out["text"])),
                "gold_pages": sorted(gold), "retrieved_pages": retrieved,
                "retrieval_hit": float(bool(set(retrieved or []) & gold)) if retriever else None,
-               "gold_is_numeric": gold_num is not None}
-        if gold_num is not None and ans["numeric_rel_tol"] is not None:
+               "gold_is_numeric": gold_num is not None,
+               # Ollama silently drops the start of prompts longer than num_ctx; flag any that came close.
+               "context_overflow": float((out.get("input_tokens") or 0)
+                                         >= cfg["llm"]["ollama"]["num_ctx"] - cfg["llm"]["max_tokens"])}
+        if gold_num is not None:
             pred = first_number(final) if final else None
+            abs_tol = rounding_tol(q["answer"]) if ans["gold_rounding_tol"] else 0.0
             row["numeric_correct"] = float(numbers_match(pred, gold_num, ans["numeric_rel_tol"],
-                                                         ans["numeric_abs_tol"], ans["allow_scale"]))
+                                                         abs_tol, ans["allow_scale"]))
+            # Diagnostic only: would it be right if we forgave a thousand/million/billion unit slip?
+            row["numeric_correct_any_scale"] = float(numbers_match(pred, gold_num, ans["numeric_rel_tol"],
+                                                                   abs_tol, allow_scale=True))
         if retriever is not None:
             row["cited_pages"] = sorted(parse_citations(out["text"]))
             row.update(citation_scores(set(row["cited_pages"]), gold))
@@ -168,8 +180,9 @@ def run_generation(cfg: dict) -> None:
 
     num = df[df.gold_is_numeric]
     summary = {"config": cfg["name"], "n": len(df), "n_numeric": len(num),
-               "numeric_accuracy": num["numeric_correct"].mean() if "numeric_correct" in df else "[set numeric_rel_tol]",
-               "refusal_rate": df.refusal.mean()}
+               "numeric_accuracy": num["numeric_correct"].mean(),
+               "numeric_acc_any_scale": num["numeric_correct_any_scale"].mean(),
+               "refusal_rate": df.refusal.mean(), "context_overflow": int(df.context_overflow.sum())}
     if retriever is not None:
         summary.update({"retrieval_hit@k": df.retrieval_hit.mean(), "cited_gold": df.cited_gold.mean(),
                         "citation_precision": df.citation_precision.mean()})
